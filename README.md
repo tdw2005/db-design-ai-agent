@@ -1,151 +1,152 @@
 # 数据库设计与部署 AI Agent
 
-用于完成数据库设计课程作业的项目，包含基础任务调研、ER 图设计、建表 SQL、种子数据生成，以及 AI 辅助数据库设计功能。
+本项目最终按导师提出的两项核心要求整理与交付：
+
+1. AI 根据用户需求生成并部署一个数据库。
+2. 编写一个 `SKILL`，覆盖 ERP/CRM 数据模型调研、Docker 部署数据库、根据 ER 模型建表，以及根据模型生成插入测试数据的代码。
+
+项目既保留了 ERP、CRM 调研与数据库建模成果，也实现了一个可运行的 Database Design Agent，能够根据自然语言生成数据库设计结果，并在确认后部署到 MySQL 8.0。`seed.py` 与 `app/seed_service.py` 则对应导师要求中“调研 + 根据模型生成代码插入数据”的落地实现。
 
 ## 项目结构
 
 ```text
 数据库设计与部署AI Agent/
-├── app/                          # 应用模块（Agent 拆分实现）
+├── app/
 │   ├── __init__.py
-│   ├── config.py                 # 配置管理（环境变量加载）
-│   ├── llm.py                    # DeepSeek API 客户端封装
-│   ├── sql_generator.py          # ER 图与 SQL 生成器
-│   ├── db_executor.py            # 数据库执行器
-│   ├── seed_service.py           # 种子数据生成服务
-│   └── agent.py                  # Agent CLI 入口逻辑
-├── docs/                         # 调研文档与 ER 图
-│   ├── erp-er.md                 # ERP 系统数据模型调研
-│   ├── crm-er.md                 # CRM 系统数据模型调研
-│   └── erp-crm-er-diagram.md     # ERP + CRM 融合核心业务数据模型
-├── .env.example                  # 环境变量模板
-├── .gitignore                    # Git 忽略文件
-├── Dockerfile                    # 应用容器镜像构建
-├── docker-compose.yml            # 容器编排配置
-├── requirements.txt              # Python 依赖
-├── SKILL.md                      # AI Agent 提示词约束
-├── schema.sql                    # 融合 ERP + CRM 的建表 SQL
-├── seed.py                       # 种子数据脚本入口
-└── agent.py                      # Agent CLI 入口
+│   ├── agent.py                  # Agent CLI 主逻辑
+│   ├── config.py                 # 环境变量与配置加载
+│   ├── db_executor.py            # MySQL 连接、等待和 SQL 执行
+│   ├── init_db.py                # 容器启动时自动执行 schema.sql
+│   ├── llm.py                    # DeepSeek API 封装
+│   ├── seed_service.py           # 测试数据生成服务
+│   └── sql_generator.py          # 数据库设计结果提取与 SQL 规则校验
+├── docs/
+│   ├── crm-er.md                 # CRM 数据模型调研（含 ER / 类图视角）
+│   ├── erp-crm-er-diagram.md     # 融合模型 ER 图
+│   └── erp-er.md                 # ERP 数据模型调研（含 ER / 类图视角）
+├── 报告/
+│   ├── 实习鉴定表-自我鉴定.txt
+│   ├── 实训总结.txt
+│   ├── 工作周志-第1周.txt
+│   ├── 工作周志-第2周.txt
+│   └── 选题报告.txt
+├── .env.example
+├── Dockerfile
+├── docker-compose.yml
+├── SKILL.md
+├── agent.py
+├── requirements.txt
+├── schema.sql
+└── seed.py
 ```
+
+## 导师要求对应关系
+
+### 1. AI 根据用户需求生成并部署数据库
+
+- 命令行入口：`agent.py`
+- 核心模块：`app/agent.py`、`app/llm.py`、`app/sql_generator.py`、`app/db_executor.py`
+- 运行方式：用户输入自然语言需求后，系统生成摘要、ER 图和 SQL；使用 `--dry-run` 时只预览，不执行；默认模式下输入 `yes` 后执行到 MySQL
+
+### 2. 编写一个 SKILL
+
+- 技能文件：`SKILL.md`
+- 技能内容：
+  - 参考 ERP、CRM 常见数据模型进行数据库抽象
+  - 输出 ER 结构摘要并生成 MySQL 8.0 DDL
+  - 结合 Docker 中的 MySQL 环境完成部署
+  - 配合 `seed.py` / `app/seed_service.py` 生成符合外键约束的测试数据插入代码
 
 ## 快速开始
 
-### 前置条件
-
-- Docker & Docker Compose
-- DeepSeek API Key（用于 AI 设计功能）
-
 ### 1. 配置环境变量
 
-复制 `.env.example` 为 `.env`，并根据需要修改配置：
+复制 `.env.example` 为 `.env`，填写数据库与 DeepSeek 参数：
 
 ```bash
 cp .env.example .env
-# 编辑 .env，填入你的 DeepSeek API Key
 ```
 
-### 2. 启动服务
+### 2. 一键启动并自动建表
 
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
-### 3. 执行建表 SQL
+说明：
+
+- `db` 服务启动 MySQL 8.0
+- `app` 服务在启动时会自动执行 `python -m app.init_db`
+- `schema.sql` 使用 `CREATE TABLE IF NOT EXISTS`，因此重复执行不会重复建表
+
+如果你已经保留了旧的数据卷并想重新初始化，可先清理容器与数据卷：
 
 ```bash
-# 进入容器执行 schema.sql
-docker-compose exec app python -c "
-from app.config import Settings
-from app.db_executor import DatabaseExecutor
-settings = Settings.from_env()
-executor = DatabaseExecutor(settings)
-executor.wait_until_ready()
-with open('schema.sql', 'r', encoding='utf-8') as f:
-    sql = f.read()
-executor.execute_sql(sql)
-print('建表完成。')
-"
+docker compose down -v
+docker compose up -d --build
 ```
 
-### 4. 插入种子数据
+### 3. 插入测试数据
 
 ```bash
-docker-compose exec app python seed.py
+docker compose exec app python seed.py
 ```
 
-## 使用说明
-
-### Database Design Agent
-
-通过自然语言描述数据库需求，自动生成 ER 图和 SQL：
+### 4. 使用 AI Agent 生成并部署数据库
 
 ```bash
-# 仅生成 SQL 并打印（dry run）
-docker-compose exec app python agent.py "设计一个电商订单管理系统" --dry-run
+# 仅生成结果，不执行数据库部署
+docker compose exec app python agent.py "设计一个图书馆借阅数据库" --dry-run
 
-# 生成并执行部署（需要确认）
-docker-compose exec app python agent.py "设计一个图书馆管理系统"
+# 生成结果并在确认后执行
+docker compose exec app python agent.py "设计一个电商订单数据库"
 ```
 
-参数说明：
+## 主要交付物
 
-- `--dry-run`：仅生成 SQL，不执行到数据库
-- `--output-dir <dir>`：指定生成结果保存目录，默认 `generated/`
+- `docs/erp-er.md`：ERP 数据模型调研
+- `docs/crm-er.md`：CRM 数据模型调研
+- `docs/erp-crm-er-diagram.md`：融合模型 ER 图
+- `schema.sql`：MySQL 8.0 建表脚本
+- `seed.py`、`app/seed_service.py`：测试数据生成代码
+- `SKILL.md`：技能提示词与执行规则
+- `README.md`：项目说明与使用方法
 
-### 访问数据库
+## 关键实现说明
 
-通过任意 MySQL 客户端连接到 `localhost:3306`，使用 `.env` 中配置的账号密码。
+### Docker 自动建表链路
 
-## 核心功能
+- `docker-compose.yml` 中 `app` 服务依赖 `db` 健康检查
+- `app` 启动后自动执行 `app/init_db.py`
+- `app/init_db.py` 会等待 MySQL 就绪，再读取 `schema.sql` 并执行
 
-### 第一阶段：基础任务（课程作业核心要求）
+### SQL 规则校验
 
-1. **ERP 数据模型调研**：见 `docs/erp-er.md`
-2. **CRM 数据模型调研**：见 `docs/crm-er.md`
-3. **融合 ERP + CRM 核心业务数据模型**：见 `docs/erp-crm-er-diagram.md`
-4. **MySQL 8.0 建表 SQL**：见 `schema.sql`，满足以下规范：
-   - 使用 InnoDB 引擎
-   - 字符集 utf8mb4
-   - 统一使用 `CREATE TABLE IF NOT EXISTS`
-   - 主键统一 `BIGINT UNSIGNED NOT NULL AUTO_INCREMENT`
-   - 统一包含 `created_at`、`updated_at` 时间字段
-   - 所有外键建立索引
-5. **Docker 部署**：通过 `docker-compose` 一键启动 MySQL 8.0
-6. **种子数据生成**：使用 `seed.py` 自动生成符合外键约束的模拟数据
+`app/sql_generator.py` 在调用模型后，会对每个 `CREATE TABLE` 语句做结构化校验，主要检查：
 
-### 第二阶段：AI 辅助数据库设计（扩展功能）
+- 是否使用 `CREATE TABLE IF NOT EXISTS`
+- 是否设置 `ENGINE=InnoDB`
+- 是否设置 `DEFAULT CHARSET=utf8mb4`
+- 主键是否为单列 `BIGINT UNSIGNED NOT NULL AUTO_INCREMENT`
+- 是否包含 `created_at`、`updated_at`
+- 外键字段是否显式建立索引
 
-- **Database Design Agent**：通过 DeepSeek API 实现自然语言到 SQL 的自动化生成
-- **输出约束**：通过 `SKILL.md` 保证生成 SQL 严格符合要求
-- **安全保障**：执行前需要手动确认，支持 `--dry-run` 预览
+### 测试数据生成
 
-## 开发环境
-
-### 本地运行
-
-```bash
-# 创建虚拟环境
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# 或
-.\venv\Scripts\activate  # Windows
-
-# 安装依赖
-pip install -r requirements.txt
-
-# 配置 .env（将 MYSQL_HOST 改为 localhost）
-```
+`seed.py` 通过 `Faker` 生成客户、联系人、产品、库存、订单、供应商等数据，并按照先父表后子表的顺序插入，保证外键约束成立。
 
 ## 技术栈
 
-- **Python 3.11+**
-- **MySQL 8.0**
-- **Docker & Docker Compose**
-- **DeepSeek API**（通过 requests 直接调用）
-- **PyMySQL**（数据库驱动）
-- **Faker**（种子数据生成）
+- Python 3.11
+- MySQL 8.0
+- Docker Compose
+- DeepSeek API
+- requests
+- PyMySQL
+- python-dotenv
+- Faker
 
-## LICENSE
+## 说明
 
-本项目仅供学习使用。
+- 本项目最终以导师要求为准进行整理。
+- 早期为驱动 AI 生成代码而补充的额外说明，已不再作为 README 的主叙述逻辑。
