@@ -34,6 +34,7 @@ venv.bak/
 .coverage
 .coverage.*
 htmlcov/
+tests/
 
 # Local environment files
 .env
@@ -49,9 +50,15 @@ generated/
 *.swo
 *~
 
+# VCS and local metadata
+.git/
+.gitignore
+
+# Local documents not needed in image
+README.md
+docs/
+报告/
+
 # OS files
 .DS_Store
 Thumbs.db
-
-# Local report materials
-报告/
