@@ -1,11 +1,11 @@
 # 数据库设计与部署 AI Agent
 
-本项目最终按导师提出的两项核心要求整理与交付：
+本项目围绕以下两项核心内容整理与交付：
 
 1. AI 根据用户需求生成并部署一个数据库。
 2. 编写一个 `SKILL`，覆盖 ERP/CRM 数据模型调研、Docker 部署数据库、根据 ER 模型建表，以及根据模型生成插入测试数据的代码。
 
-项目既保留了 ERP、CRM 调研与数据库建模成果，也实现了一个可运行的 Database Design Agent，能够根据自然语言生成数据库设计结果，并在确认后部署到 MySQL 8.0。`seed.py` 与 `app/seed_service.py` 则对应导师要求中“调研 + 根据模型生成代码插入数据”的落地实现。
+本项目实现了一个可运行的 Database Design Agent，能够根据自然语言生成数据库设计结果，并在确认后部署到 MySQL 8.0。`seed.py` 与 `app/seed_service.py` 用于生成符合约束关系的测试数据。
 
 ## 项目结构
 
@@ -24,12 +24,8 @@
 │   ├── crm-er.md                 # CRM 数据模型调研（含 ER / 类图视角）
 │   ├── erp-crm-er-diagram.md     # 融合模型 ER 图
 │   └── erp-er.md                 # ERP 数据模型调研（含 ER / 类图视角）
-├── 报告/
-│   ├── 实习鉴定表-自我鉴定.txt
-│   ├── 实训总结.txt
-│   ├── 工作周志-第1周.txt
-│   ├── 工作周志-第2周.txt
-│   └── 选题报告.txt
+├── tests/
+│   └── test_sql_generator.py     # SQL 生成与规则校验测试
 ├── .env.example
 ├── Dockerfile
 ├── docker-compose.yml
@@ -40,7 +36,7 @@
 └── seed.py
 ```
 
-## 导师要求对应关系
+## 功能对应关系
 
 ### 1. AI 根据用户需求生成并部署数据库
 
@@ -111,6 +107,7 @@ docker compose exec app python agent.py "设计一个电商订单数据库"
 - `seed.py`、`app/seed_service.py`：测试数据生成代码
 - `SKILL.md`：技能提示词与执行规则
 - `README.md`：项目说明与使用方法
+- `.env.example`、`docker-compose.yml`、`Dockerfile`：环境配置与容器部署文件
 
 ## 关键实现说明
 
@@ -146,7 +143,3 @@ docker compose exec app python agent.py "设计一个电商订单数据库"
 - python-dotenv
 - Faker
 
-## 说明
-
-- 本项目最终以导师要求为准进行整理。
-- 早期为驱动 AI 生成代码而补充的额外说明，已不再作为 README 的主叙述逻辑。
